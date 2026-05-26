@@ -4,9 +4,9 @@ import { useState, useRef, useCallback, useEffect } from "react";
 const FIRM    = "Carrasco Ortega Asesores";
 const FEMAIL  = "info@coasesores.es";
 const MAX_CHARS = 6000;
-const emps=await sGet(SK_EMPLEADOS,[]);
-const hist=await sGet(SK_HISTORIAL,[]);
-const ejs=await sGet(SK_EJEMPLOS,{});
+const SK_EMPLEADOS  = "co_empleados_v1";
+const SK_HISTORIAL  = "co_historial_v1";
+const SK_EJEMPLOS   = "co_ejemplos_v3";
 
 const COLORES_EMPLEADO = [
   "#2E74D0","#059669","#D97706","#7C3AED","#DC2626",
@@ -410,9 +410,9 @@ export default function App(){
   // Cargar datos compartidos al montar
   useEffect(()=>{
     (async()=>{
-      const emps=await sGet(SK_EMPLEADOS)||[];
-      const hist=await sGet(SK_HISTORIAL)||[];
-      const ejs=await sGet(SK_EJEMPLOS)||{};
+      const emps=await sGet(SK_EMPLEADOS,[]);
+      const hist=await sGet(SK_HISTORIAL,[]);
+      const ejs=await sGet(SK_EJEMPLOS,{});
       setEmpleados(emps);
       setHistorial(hist);
       setEjemplosPorMateria(ejs);
