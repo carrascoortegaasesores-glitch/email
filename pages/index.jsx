@@ -91,8 +91,22 @@ async function loadPdfJs(){if(window.pdfjsLib)return window.pdfjsLib;return new 
 async function parsePdfFile(file){const lib=await loadPdfJs();const buf=await file.arrayBuffer();const pdf=await lib.getDocument({data:buf}).promise;let text="";for(let i=1;i<=pdf.numPages;i++){const page=await pdf.getPage(i);const c=await page.getTextContent();text+=c.items.map(it=>it.str).join(" ")+"\n";}return text.trim();}
 
 // ─── Storage helpers ──────────────────────────────────────────
-async function sGet(key){try{const v=localStorage.getItem(key);return v?JSON.parse(v):null;}catch{return null;}}
-async function sSet(key,val){try{localStorage.setItem(key,JSON.stringify(val));}catch{}}
+async function sGet(key){
+  try{
+    const r=await fetch(`/api/db?key=${encodeURIComponent(key)}`);
+    const d=await r.json();
+    return d.value?JSON.parse(d.value):null;
+  }catch{return null;}
+}
+async function sSet(key,val){
+  try{
+    await fetch('/api/db',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({key,value:JSON.stringify(val)}),
+    });
+  }catch{}
+}
 
 // ─── Colores ─────────────────────────────────────────────────
 const C={
