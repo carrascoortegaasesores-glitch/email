@@ -492,7 +492,7 @@ export default function App(){
     if(!emailText.trim()){setError("Añade el texto del email.");return;}
     setError("");setLoading(true);setResponse("");setSavedOk(false);
     try{
-      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:buildSystem(),messages:[{role:"user",content:buildPrompt()}]})});
+      const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:buildSystem(),messages:[{role:"user",content:buildPrompt()}]})});
       const data=await res.json();
       if(data.content?.[0]?.text){
         setResponse(data.content[0].text);
