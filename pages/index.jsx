@@ -4,9 +4,9 @@ import { useState, useRef, useCallback, useEffect } from "react";
 const FIRM    = "Carrasco Ortega Asesores";
 const FEMAIL  = "info@coasesores.es";
 const MAX_CHARS = 6000;
-const SK_EMPLEADOS  = "co_empleados_v1";
-const SK_HISTORIAL  = "co_historial_v1";
-const SK_EJEMPLOS   = "co_ejemplos_v3";
+const emps=await sGet(SK_EMPLEADOS,[]);
+const hist=await sGet(SK_HISTORIAL,[]);
+const ejs=await sGet(SK_EJEMPLOS,{});
 
 const COLORES_EMPLEADO = [
   "#2E74D0","#059669","#D97706","#7C3AED","#DC2626",
@@ -91,12 +91,14 @@ async function loadPdfJs(){if(window.pdfjsLib)return window.pdfjsLib;return new 
 async function parsePdfFile(file){const lib=await loadPdfJs();const buf=await file.arrayBuffer();const pdf=await lib.getDocument({data:buf}).promise;let text="";for(let i=1;i<=pdf.numPages;i++){const page=await pdf.getPage(i);const c=await page.getTextContent();text+=c.items.map(it=>it.str).join(" ")+"\n";}return text.trim();}
 
 // ─── Storage helpers ──────────────────────────────────────────
-async function sGet(key){
+async function sGet(key,fallback=null){
   try{
     const r=await fetch(`/api/db?key=${encodeURIComponent(key)}`);
     const d=await r.json();
-    return d.value?JSON.parse(d.value):null;
-  }catch{return null;}
+    if(!d.value||d.value==='null')return fallback;
+    const parsed=JSON.parse(d.value);
+    return parsed??fallback;
+  }catch{return fallback;}
 }
 async function sSet(key,val){
   try{
