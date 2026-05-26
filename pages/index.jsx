@@ -1,5 +1,4 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import Head from "next/head";
 
 // ─── Constantes ──────────────────────────────────────────────
 const FIRM    = "Carrasco Ortega Asesores";
@@ -185,7 +184,6 @@ function PantallaEmpleado({empleados,onSelect,onAdd}){
         </div>
       </div>
     </div>
-    </>
   );
 }
 
@@ -283,7 +281,6 @@ function VistaHistorial({historial,empleados,empleadoActual}){
         })}
       </div>
     </div>
-    </>
   );
 }
 
@@ -365,7 +362,6 @@ function VistaEjemplos({ejemplosPorMateria,onDelete,empleados}){
         </div>
       )}
     </div>
-    </>
   );
 }
 
@@ -541,9 +537,8 @@ export default function App(){
   const TABS=[{id:"consulta",label:"Nueva consulta",icon:"✉️"},{id:"historial",label:"Historial",icon:"📋",badge:historial.length},{id:"ejemplos",label:"Ejemplos",icon:"📚",badge:totalEjemplos}];
 
   return(
-    <><Head><title>Carrasco Ortega Asesores · Asistente</title></Head>
     <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Helvetica Neue',Arial,sans-serif",color:C.text}}>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}*{box-sizing:border-box;}input::placeholder,textarea::placeholder{color:${C.textLight};}`}</style>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}*{box-sizing:border-box;}input::placeholder,textarea::placeholder{color:#7A9CC4;}`}</style>
 
       {/* ── Header ── */}
       <div style={{background:`linear-gradient(135deg,${C.blue900},${C.blue800})`,padding:"0 32px",position:"sticky",top:0,zIndex:20,boxShadow:"0 2px 12px rgba(13,43,94,0.3)"}}>
@@ -763,6 +758,5 @@ export default function App(){
         </>)}
       </div>
     </div>
-    </>
   );
 }
