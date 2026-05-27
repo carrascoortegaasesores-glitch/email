@@ -96,9 +96,12 @@ async function sGet(key,fallback=null){
   try{
     const r=await fetch('/api/db?key='+encodeURIComponent(key));
     const d=await r.json();
-    if(!d.value||d.value==='null')return fallback;
-    const parsed=JSON.parse(d.value);
-    return parsed??fallback;
+    const val=d.value;
+    if(val===null||val===undefined)return fallback;
+    if(typeof val==='string'){
+      try{return JSON.parse(val)??fallback;}catch{return fallback;}
+    }
+    return Array.isArray(val)||typeof val==='object'?val:fallback;
   }catch{return fallback;}
 }
 async function sSet(key,val){
