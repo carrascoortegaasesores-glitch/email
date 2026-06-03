@@ -8,6 +8,7 @@ const SK_EMPLEADOS  = "co_empleados_v1";
 const SK_HISTORIAL  = "co_historial_v1";
 const SK_EJEMPLOS   = "co_ejemplos_v3";
 const SK_MATERIAS   = "co_materias_v1";
+const SK_CLIENTES   = "co_clientes_v1";
 const CANALES = [{id:"email",label:"Email",icon:"✉️"},{id:"whatsapp",label:"WhatsApp",icon:"💬"}];
 
 const COLORES_EMPLEADO = [
@@ -498,10 +499,18 @@ export default function App(){
       const hist=await sGet(SK_HISTORIAL,[]);
       const ejs=await sGet(SK_EJEMPLOS,{});
       const mats=await sGet(SK_MATERIAS,null);
+      const clis=await sGet(SK_CLIENTES,[]);
       setEmpleados(emps);
       setHistorial(hist);
       setEjemplosPorMateria(ejs);
       if(mats&&Array.isArray(mats)&&mats.length>0)setMaterias(mats);
+      if(clis&&clis.length>0){
+        setClients(prev=>{
+          const base=[...prev];
+          clis.forEach(c=>{if(!base.find(b=>b.n===c.n))base.push(c);});
+          return base.sort((a,b)=>a.n.localeCompare(b.n,"es"));
+        });
+      }
     })();
   },[]);
 
@@ -523,7 +532,24 @@ export default function App(){
   const empresas=clients.filter(c=>c.t==="E");
 
   const handleSelectChange=(e)=>{const v=e.target.value;if(v==="__new__"){setShowNew(true);setSelClient("");}else{setSelClient(v);setShowNew(false);}};
-  const confirmNew=()=>{if(!newName.trim()){alert("Escribe el nombre.");return;}if(!newType){alert("Selecciona tipo.");return;}const c={n:newName.trim(),t:newType};setClients(prev=>[...prev,c].sort((a,b)=>a.n.localeCompare(b.n,"es")));setSelClient(c.n);setShowNew(false);setNewName("");setNewType(null);};
+  const confirmNew=async()=>{
+    if(!newName.trim()){alert("Escribe el nombre.");return;}
+    if(!newType){alert("Selecciona tipo.");return;}
+    const c={n:newName.trim(),t:newType,custom:true};
+    const next=await (async()=>{
+      // Cargar clientes custom actuales y añadir el nuevo
+      const existing=await sGet(SK_CLIENTES,[])||[];
+      if(!existing.find(e=>e.n===c.n)){existing.push(c);}
+      await sSet(SK_CLIENTES,existing);
+      return existing;
+    })();
+    setClients(prev=>{
+      const base=[...prev];
+      if(!base.find(b=>b.n===c.n))base.push(c);
+      return base.sort((a,b)=>a.n.localeCompare(b.n,"es"));
+    });
+    setSelClient(c.n);setShowNew(false);setNewName("");setNewType(null);
+  };
   const toggleTopic=(id)=>setTopics(prev=>prev.includes(id)?[]:[id]);
 
   const processFile=useCallback(async(file)=>{
@@ -927,6 +953,7 @@ const SK_EMPLEADOS  = "co_empleados_v1";
 const SK_HISTORIAL  = "co_historial_v1";
 const SK_EJEMPLOS   = "co_ejemplos_v3";
 const SK_MATERIAS   = "co_materias_v1";
+const SK_CLIENTES   = "co_clientes_v1";
 const CANALES = [{id:"email",label:"Email",icon:"✉️"},{id:"whatsapp",label:"WhatsApp",icon:"💬"}];
 
 const COLORES_EMPLEADO = [
@@ -1417,10 +1444,18 @@ export default function App(){
       const hist=await sGet(SK_HISTORIAL,[]);
       const ejs=await sGet(SK_EJEMPLOS,{});
       const mats=await sGet(SK_MATERIAS,null);
+      const clis=await sGet(SK_CLIENTES,[]);
       setEmpleados(emps);
       setHistorial(hist);
       setEjemplosPorMateria(ejs);
       if(mats&&Array.isArray(mats)&&mats.length>0)setMaterias(mats);
+      if(clis&&clis.length>0){
+        setClients(prev=>{
+          const base=[...prev];
+          clis.forEach(c=>{if(!base.find(b=>b.n===c.n))base.push(c);});
+          return base.sort((a,b)=>a.n.localeCompare(b.n,"es"));
+        });
+      }
     })();
   },[]);
 
@@ -1442,7 +1477,24 @@ export default function App(){
   const empresas=clients.filter(c=>c.t==="E");
 
   const handleSelectChange=(e)=>{const v=e.target.value;if(v==="__new__"){setShowNew(true);setSelClient("");}else{setSelClient(v);setShowNew(false);}};
-  const confirmNew=()=>{if(!newName.trim()){alert("Escribe el nombre.");return;}if(!newType){alert("Selecciona tipo.");return;}const c={n:newName.trim(),t:newType};setClients(prev=>[...prev,c].sort((a,b)=>a.n.localeCompare(b.n,"es")));setSelClient(c.n);setShowNew(false);setNewName("");setNewType(null);};
+  const confirmNew=async()=>{
+    if(!newName.trim()){alert("Escribe el nombre.");return;}
+    if(!newType){alert("Selecciona tipo.");return;}
+    const c={n:newName.trim(),t:newType,custom:true};
+    const next=await (async()=>{
+      // Cargar clientes custom actuales y añadir el nuevo
+      const existing=await sGet(SK_CLIENTES,[])||[];
+      if(!existing.find(e=>e.n===c.n)){existing.push(c);}
+      await sSet(SK_CLIENTES,existing);
+      return existing;
+    })();
+    setClients(prev=>{
+      const base=[...prev];
+      if(!base.find(b=>b.n===c.n))base.push(c);
+      return base.sort((a,b)=>a.n.localeCompare(b.n,"es"));
+    });
+    setSelClient(c.n);setShowNew(false);setNewName("");setNewType(null);
+  };
   const toggleTopic=(id)=>setTopics(prev=>prev.includes(id)?[]:[id]);
 
   const processFile=useCallback(async(file)=>{
