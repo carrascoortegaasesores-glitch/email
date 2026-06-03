@@ -946,7 +946,7 @@ ${esWA
     return sys;
   };
 
-    const buildPrompt=()=>{
+  const buildPrompt=()=>{
     const name=clientObj?clientObj.n:"No especificado";
     const type=clientObj?(clientObj.t==="E"?"Empresa":"Autónomo"):"No especificado";
     const tLines=topics.map(id=>materias.find(m=>m.id===id)?.detail||id).join("\n");
