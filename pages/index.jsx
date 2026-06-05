@@ -490,6 +490,8 @@ export default function App(){
   const [copied,setCopied]=useState(false);
   const [savedOk,setSavedOk]=useState(false);
   const [canal,setCanal]=useState("email");
+  const [ajuste,setAjuste]=useState("");
+  const [ajustando,setAjustando]=useState(false);
   const responseRef=useRef(null);
 
   // Cargar datos compartidos al montar
@@ -575,373 +577,24 @@ export default function App(){
 
   const buildSystem=(canal)=>{
     const esWA = canal==="whatsapp";
-    let sys=`Eres el equipo de ${FIRM}, asesoría especializada en fiscal, contable y laboral en España.
-- Responde SIEMPRE en español.
-- Tono profesional pero cercano, nunca frío.
-- NUNCA uses comillas ("") para enfatizar palabras dentro del texto.
-${esWA
-  ? "- FORMATO WHATSAPP: Respuesta muy corta y directa, máximo 4-5 líneas. Sin saludos largos ni despedidas formales. Ve al grano. Cierra con: El equipo de " + FIRM
-  : "- FORMATO EMAIL: Respuesta completa y bien explicada. Saluda por nombre, desarrolla con detalle, indica siguiente paso y cierra con oferta de ayuda. Firma: El equipo de " + FIRM + "\n" + FEMAIL
-}
-- Si hay riesgo fiscal, legal o de plazo, menciónalo brevemente.
-- Si falta información para responder con precisión, indícalo.`;  };
-
-  const buildPrompt=()=>{
-    const name=clientObj?clientObj.n:"No especificado";
-    const type=clientObj?(clientObj.t==="E"?"Empresa":"Autónomo"):"No especificado";
-    const tLines=topics.map(id=>materias.find(m=>m.id===id)?.detail||id).join("\n");
-    const txt=emailText.trim().substring(0,MAX_CHARS);
-    return[`Nombre del cliente: ${name}`,`Tipo de cliente: ${type}`,tLines,extraCtx?`Contexto: ${extraCtx}`:"","","Email o documento recibido:","---",txt,"---","","Redacta una propuesta de respuesta profesional, lista para revisar y enviar."].filter(Boolean).join("\n");
-  };
-
-  const generate=async()=>{
-    if(!emailText.trim()){setError("Añade el texto del email.");return;}
-    setError("");setLoading(true);setResponse("");setSavedOk(false);
-    try{
-      const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-5-20251001",max_tokens:1000,system:buildSystem(canal),messages:[{role:"user",content:buildPrompt()}]})});
-      const data=await res.json();
-      if(data.content?.[0]?.text){
-        setResponse(data.content[0].text);
-        // Guardar en historial automáticamente
-        const entrada={
-          id:Date.now().toString(),
-          empleadoId:empleadoActual.id,
-          empleadoNombre:empleadoActual.nombre,
-          cliente:clientObj?clientObj.n:"No especificado",
-          materias:topics,
-          emailResumen:emailText.trim().substring(0,500),
-          respuesta:data.content[0].text,
-          fecha:new Date().toLocaleDateString("es-ES",{day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"}),
-          guardado:false,
-        };
-        const nextHist=[...historial,entrada];
-        await sSet(SK_HISTORIAL,nextHist);
-        setHistorial(nextHist);
-        // Actualizar contador del empleado
-        const nextEmps=empleados.map(e=>e.id===empleadoActual.id?{...e,consultas:(e.consultas||0)+1}:e);
-        await sSet(SK_EMPLEADOS,nextEmps);
-        setEmpleados(nextEmps);
-        setTimeout(()=>responseRef.current?.scrollIntoView({behavior:"smooth",block:"start"}),120);
-      }else setError("Error API: "+(data.error?.message||JSON.stringify(data)));
-    }catch(e){setError("Error de red: "+e.message);}
-    finally{setLoading(false);}
-  };
-
-  const guardarEjemplo=async()=>{
-    if(!response.trim())return;
-    const nuevo={cliente:clientObj?clientObj.n:"(sin cliente)",texto:response.trim(),fecha:new Date().toLocaleDateString("es-ES",{day:"2-digit",month:"2-digit",year:"2-digit"}),empleadoNombre:empleadoActual.nombre};
-    const destinos=topics.length>0?topics:["Otros"];
-    const next={...ejemplosPorMateria};
-    destinos.forEach(tid=>{next[tid]=[...(next[tid]||[]),nuevo];});
-    await sSet(SK_EJEMPLOS,next);
-    setEjemplosPorMateria(next);
-    // Marcar entrada como guardada en historial
-    const nextHist=historial.map(h=>h.respuesta===response?{...h,guardado:true}:h);
-    await sSet(SK_HISTORIAL,nextHist);
-    setHistorial(nextHist);
-    setSavedOk(true);
-  };
-
-  const deleteEjemplo=async(matId,idx)=>{
-    const next={...ejemplosPorMateria};
-    next[matId]=(next[matId]||[]).filter((_,i)=>i!==idx);
-    if(next[matId].length===0)delete next[matId];
-    await sSet(SK_EJEMPLOS,next);
-    setEjemplosPorMateria(next);
-  };
-
-  const renameEjemplo=async(matId,idx,titulo)=>{
-    const next={...ejemplosPorMateria};
-    next[matId]=(next[matId]||[]).map((ej,i)=>i===idx?{...ej,titulo:titulo.trim()}:ej);
-    await sSet(SK_EJEMPLOS,next);
-    setEjemplosPorMateria(next);
-  };
-
-  const addMateria=async(label,sub,detail)=>{
-    const id="custom_"+Date.now().toString();
-    const nueva={id,label,sub:sub||"",detail:detail||"Materia: "+label+".",custom:true};
-    const next=[...materias,nueva];
-    await sSet(SK_MATERIAS,next);
-    setMaterias(next);
-  };
-
-  const deleteMateria=async(id)=>{
-    const next=materias.filter(m=>m.id!==id);
-    await sSet(SK_MATERIAS,next);
-    setMaterias(next);
-    // Limpiar de topics si estaba seleccionada
-    setTopics(prev=>prev.filter(t=>t!==id));
-  };
-
-  const copy=()=>{navigator.clipboard.writeText(response).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2200);});};
-  const reset=()=>{setSelClient("");setShowNew(false);setNewName("");setNewType(null);setExtraCtx("");setTopics([]);clearContent();setResponse("");setError("");setCopied(false);setSavedOk(false);setCanal("email");};
-
-  // ── Pantalla empleado ──
-  if(!empleadoActual)return(<><style>{`@keyframes spin{to{transform:rotate(360deg)}}*{box-sizing:border-box;}`}</style><PantallaEmpleado empleados={empleados} onSelect={selectEmpleado} onAdd={addEmpleado}/></>);
-
-  const TABS=[{id:"consulta",label:"Nueva consulta",icon:"✉️"},{id:"historial",label:"Historial",icon:"📋",badge:historial.length},{id:"ejemplos",label:"Ejemplos",icon:"📚",badge:totalEjemplos}];
-
-  return(
-    <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Helvetica Neue',Arial,sans-serif",color:C.text}}>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}*{box-sizing:border-box;}input::placeholder,textarea::placeholder{color:${C.textLight};}`}</style>
-
-      {/* ── Header ── */}
-      <div style={{background:`linear-gradient(135deg,${C.blue900},${C.blue800})`,padding:"0 32px",position:"sticky",top:0,zIndex:20,boxShadow:"0 2px 12px rgba(13,43,94,0.3)"}}>
-        <div style={{maxWidth:860,margin:"0 auto"}}>
-          <div style={{height:60,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <div style={{display:"flex",alignItems:"center",gap:14}}>
-              <div style={{width:36,height:36,background:"rgba(255,255,255,0.15)",borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid rgba(255,255,255,0.25)"}}>
-                <span style={{color:"#fff",fontWeight:800,fontSize:12}}>CO</span>
-              </div>
-              <div>
-                <div style={{fontWeight:700,fontSize:14,color:"#fff"}}>{FIRM}</div>
-                <div style={{fontSize:10,color:C.blue200,letterSpacing:".5px"}}>Asistente de correspondencia</div>
-              </div>
-            </div>
-            <button onClick={cambiarEmpleado} style={{display:"flex",alignItems:"center",gap:8,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:20,padding:"5px 12px 5px 6px",cursor:"pointer"}}>
-              <Avatar nombre={empleadoActual.nombre} color={empleadoActual.color} size={26}/>
-              <span style={{fontSize:12,color:"#fff",fontWeight:500}}>{empleadoActual.nombre}</span>
-              <span style={{fontSize:10,color:"rgba(255,255,255,.5)"}}>▼</span>
-            </button>
-          </div>
-          {/* Tabs */}
-          <div style={{display:"flex",gap:2,paddingBottom:0}}>
-            {TABS.map(t=>(
-              <button key={t.id} onClick={()=>setTab(t.id)} style={{
-                padding:"10px 18px",background:"transparent",border:"none",cursor:"pointer",
-                color:tab===t.id?"#fff":C.blue200,fontWeight:tab===t.id?700:400,fontSize:12,
-                borderBottom:tab===t.id?`2px solid #fff`:"2px solid transparent",
-                display:"flex",alignItems:"center",gap:6,transition:"all .15s",
-              }}>
-                <span>{t.icon}</span>
-                <span>{t.label}</span>
-                {t.badge>0&&<span style={{background:"rgba(255,255,255,.2)",borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:700}}>{t.badge}</span>}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div style={{maxWidth:860,margin:"0 auto",padding:"32px 32px 100px"}}>
-
-        {/* ── TAB: HISTORIAL ── */}
-        {tab==="historial"&&<VistaHistorial historial={historial} empleados={empleados} empleadoActual={empleadoActual} materias={materias}/>}
-
-        {/* ── TAB: EJEMPLOS ── */}
-        {tab==="ejemplos"&&<VistaEjemplos ejemplosPorMateria={ejemplosPorMateria} onDelete={deleteEjemplo} onRename={renameEjemplo} empleados={empleados} materias={materias}/>}
-
-        {/* ── TAB: NUEVA CONSULTA ── */}
-        {tab==="consulta"&&(<>
-
-          {/* 1. CLIENTE */}
-          <div style={{background:C.surface,borderRadius:14,padding:24,marginBottom:14,boxShadow:"0 1px 6px rgba(13,43,94,0.07)",border:`1px solid ${C.border}`}}>
-            <SLabel>Cliente</SLabel>
-
-            {/* Desplegable + tipo + botón nuevo */}
-            <div style={{display:"flex",gap:10,marginBottom:14,alignItems:"flex-end",flexWrap:"wrap"}}>
-              <div style={{flex:2,minWidth:160}}>
-                <FLabel>Seleccionar cliente</FLabel>
-                <select style={{...field,cursor:"pointer"}} value={selClient} onChange={e=>{setSelClient(e.target.value);setShowNew(false);}}>
-                  <option value="">— Selecciona un cliente —</option>
-                  <optgroup label="— Autónomos">{autonomos.map(c=><option key={c.n} value={c.n}>{c.n}</option>)}</optgroup>
-                  <optgroup label="— Empresas">{empresas.map(c=><option key={c.n} value={c.n}>{c.n}</option>)}</optgroup>
-                </select>
-              </div>
-              <div style={{flex:1,minWidth:100}}>
-                <FLabel>Tipo</FLabel>
-                <div style={{...field,minHeight:38,display:"flex",alignItems:"center",background:C.card}}>
-                  {clientObj?(<span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:5,letterSpacing:".5px",background:clientObj.t==="E"?C.blue100:C.okBg,color:clientObj.t==="E"?C.blue600:C.okText,border:`1px solid ${clientObj.t==="E"?C.blue200:C.okBdr}`}}>{clientObj.t==="E"?"EMPRESA":"AUTÓNOMO"}</span>):<span style={{color:C.textLight,fontSize:12}}>—</span>}
-                </div>
-              </div>
-              <div>
-                <button onClick={()=>{setShowNew(o=>!o);setSelClient("");}} style={{
-                  cursor:"pointer",height:38,padding:"0 14px",
-                  background:showNew?C.border2:`linear-gradient(135deg,${C.blue600},${C.blue800})`,
-                  color:showNew?C.textMid:"#fff",border:"none",borderRadius:8,
-                  fontSize:12,fontWeight:700,whiteSpace:"nowrap",
-                  boxShadow:showNew?"none":"0 2px 6px rgba(30,91,175,0.3)",
-                }}>
-                  {showNew?"✕ Cancelar":"＋ Nuevo cliente"}
-                </button>
-              </div>
-            </div>
-
-            {/* Formulario nuevo cliente */}
-            {showNew&&(
-              <div style={{padding:16,border:`1px solid ${C.blue200}`,borderRadius:10,background:C.blue50,marginBottom:14}}>
-                <div style={{fontSize:12,fontWeight:700,color:C.blue600,marginBottom:12}}>👤 Datos del nuevo cliente</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
-                  <div>
-                    <FLabel>Nombre o razón social</FLabel>
-                    <input style={field} placeholder="Ej: Transportes López SL" value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&confirmNew()}/>
-                  </div>
-                  <div>
-                    <FLabel>Tipo de cliente</FLabel>
-                    <div style={{display:"flex",gap:8,marginTop:2}}>
-                      {[["empresa","🏢 Empresa",C.blue100,C.blue600],["autonomo","👤 Autónomo",C.okBg,C.okText]].map(([val,label,bg,col])=>(
-                        <button key={val} onClick={()=>setNewType(val)} style={{flex:1,padding:"9px 0",border:`1px solid ${newType===val?col:C.border2}`,borderRadius:8,cursor:"pointer",fontSize:11,background:newType===val?bg:"white",color:newType===val?col:C.textMid,fontWeight:newType===val?700:400}}>{label}</button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <BtnPri onClick={confirmNew} style={{width:"100%",padding:11,fontSize:13}}>Confirmar y añadir cliente</BtnPri>
-              </div>
-            )}
-
-            {/* Contexto adicional */}
-            <div>
-              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}>
-                <FLabel style={{marginBottom:0}}>Contexto adicional</FLabel>
-                <span style={{fontSize:10,color:C.textLight}}>(opcional)</span>
-              </div>
-              <input style={field} placeholder="Ej: primer año de actividad · cliente con deuda pendiente · ya avisamos en enero..." value={extraCtx} onChange={e=>setExtraCtx(e.target.value)}/>
-              <div style={{fontSize:11,color:C.textLight,marginTop:6,lineHeight:1.5,background:C.blue50,border:`1px solid ${C.blue100}`,borderRadius:6,padding:"7px 10px"}}>
-                💡 Información interna tuya que ayuda a personalizar la respuesta — el cliente no la verá nunca. Ej: <em>"lleva 3 meses sin pagar"</em>, <em>"es su primer año como autónomo"</em>, <em>"ya le notificamos esto en marzo"</em>.
-              </div>
-            </div>
-          </div>
-
-          {/* 2. MATERIA */}
-          <div style={{background:C.surface,borderRadius:14,padding:24,marginBottom:14,boxShadow:"0 1px 6px rgba(13,43,94,0.07)",border:`1px solid ${C.border}`}}>
-            <SLabel>Materia de la consulta</SLabel>
-            <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-              {materias.map(m=>{
-                const on=topics.includes(m.id);
-                const ejCount=(ejemplosPorMateria[m.id]||[]).length;
-                return(
-                  <div key={m.id} style={{position:"relative",display:"inline-block"}}>
-                    <button onClick={()=>toggleTopic(m.id)} style={{cursor:"pointer",textAlign:"left",lineHeight:1.35,padding:"7px 13px",borderRadius:8,fontSize:12,border:`1px solid ${on?C.blue500:C.border2}`,background:on?`linear-gradient(135deg,${C.blue500},${C.blue800})`:"transparent",color:on?"#fff":C.textMid,boxShadow:on?"0 2px 6px rgba(30,91,175,0.25)":"none",transition:"all .15s",paddingRight:m.custom?"28px":"13px"}}>
-                      <span>{m.label}</span>
-                      {m.sub&&<span style={{display:"block",fontSize:10,opacity:on?.8:.6,marginTop:2}}>{m.sub}</span>}
-                      {ejCount>0&&<span style={{position:"absolute",top:-6,right:-6,background:on?"#fff":C.blue500,color:on?C.blue600:"#fff",fontSize:9,fontWeight:700,width:16,height:16,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",border:`1px solid ${on?C.blue200:"transparent"}`}}>{ejCount}</span>}
-                    </button>
-                    {m.custom&&<button onClick={e=>{e.stopPropagation();deleteMateria(m.id);}} style={{position:"absolute",top:2,right:4,background:"none",border:"none",cursor:"pointer",fontSize:11,color:on?"rgba(255,255,255,0.7)":C.textLight,lineHeight:1,padding:"2px"}}>✕</button>}
-                  </div>
-                );
-              })}
-            </div>
-            {topics.length>0&&(
-              <div style={{marginTop:12,padding:"8px 12px",background:C.blue50,borderRadius:8,border:`1px solid ${C.blue100}`,fontSize:11,color:C.blue600}}>
-                {topics.reduce((t,id)=>t+(ejemplosPorMateria[id]||[]).length,0)>0
-                  ?`✓ Se cargarán ${topics.reduce((t,id)=>t+(ejemplosPorMateria[id]||[]).length,0)} ejemplos del equipo como referencia`
-                  :"Sin ejemplos aún para estas materias · guarda respuestas buenas para mejorar la precisión"}
-              </div>
-            )}
-            <NuevaMateria onAdd={addMateria} onDelete={deleteMateria} materias={materias}/>
-          </div>
-
-          {/* 3. CANAL */}
-          <div style={{background:C.surface,borderRadius:14,padding:20,marginBottom:14,boxShadow:"0 1px 6px rgba(13,43,94,0.07)",border:`1px solid ${C.border}`}}>
-            <SLabel>Canal de respuesta</SLabel>
-            <div style={{display:"flex",gap:10}}>
-              {CANALES.map(c=>{
-                const on=canal===c.id;
-                return(
-                  <button key={c.id} onClick={()=>setCanal(c.id)} style={{
-                    flex:1,padding:"12px 16px",borderRadius:10,cursor:"pointer",
-                    border:`1.5px solid ${on?C.blue500:C.border2}`,
-                    background:on?`linear-gradient(135deg,${C.blue500},${C.blue800})`:"transparent",
-                    color:on?"#fff":C.textMid,fontWeight:on?700:400,fontSize:13,
-                    display:"flex",alignItems:"center",justifyContent:"center",gap:8,
-                    boxShadow:on?"0 2px 8px rgba(30,91,175,0.25)":"none",transition:"all .15s",
-                  }}>
-                    <span style={{fontSize:18}}>{c.icon}</span>
-                    <div style={{textAlign:"left"}}>
-                      <div>{c.label}</div>
-                      <div style={{fontSize:10,opacity:on?.8:.6,marginTop:1}}>
-                        {c.id==="email"?"Respuesta detallada y completa":"Respuesta corta y directa"}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 4. EMAIL */}
-          <div style={{background:C.surface,borderRadius:14,padding:24,marginBottom:14,boxShadow:"0 1px 6px rgba(13,43,94,0.07)",border:`1px solid ${C.border}`}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-              <SLabel>Email o documento recibido</SLabel>
-              <span style={{fontSize:11,color:C.textLight}}>{emailText.length} car.</span>
-            </div>
-            <Alert type="warn" visible={truncated}>⚠ Contenido muy largo. Se usarán los primeros {MAX_CHARS.toLocaleString()} caracteres.</Alert>
-            <div onDragOver={e=>{e.preventDefault();setIsDragging(true);}} onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setIsDragging(false);}} onDrop={handleDrop}
-              style={{border:`2px dashed ${isDragging?C.blue500:C.border}`,borderRadius:10,padding:16,background:isDragging?C.blue50:C.card,transition:"all .15s"}}>
-              {!emailText&&!pdfLoading&&(
-                <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:12,padding:"14px 16px",background:C.blue50,borderRadius:8,border:`1px solid ${C.blue100}`}}>
-                  <span style={{fontSize:22,flexShrink:0}}>📧</span>
-                  <div><div style={{fontSize:13,color:C.blue600,fontWeight:500}}>Arrastra aquí el <strong>.eml</strong> desde Thunderbird o un <strong>PDF</strong></div><div style={{fontSize:11,marginTop:3,color:C.textLight}}>O pega el texto directamente abajo</div></div>
-                </div>
-              )}
-              {pdfLoading&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,fontSize:12,color:C.textMid}}><Spin c={C.blue600}/>Leyendo PDF...</div>}
-              {fileName&&(
-                <div style={{display:"flex",alignItems:"center",gap:8,background:C.blue50,border:`1px solid ${C.blue200}`,borderRadius:6,padding:"7px 12px",fontSize:11,marginBottom:10}}>
-                  <span>📎</span><span style={{fontWeight:600,color:C.blue600}}>{fileName}</span><span style={{color:C.textLight}}>· cargado</span>
-                  <button onClick={clearContent} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,color:C.textLight,padding:"0 3px",marginLeft:"auto"}}>✕</button>
-                </div>
-              )}
-              <textarea value={emailText} onChange={e=>{setEmailText(e.target.value);setTruncated(e.target.value.length>MAX_CHARS);}} placeholder="O pega el texto del email aquí..."
-                style={{...field,minHeight:150,resize:"vertical",lineHeight:1.7,border:"none",padding:"4px 0",outline:"none",background:"transparent"}}/>
-            </div>
-          </div>
-
-          <Alert type="err" visible={!!error}>{error}</Alert>
-
-          <BtnPri onClick={generate} disabled={loading} style={{width:"100%",padding:16,fontSize:13,borderRadius:10,letterSpacing:".5px",boxShadow:"0 4px 14px rgba(30,91,175,0.35)"}}>
-            {loading?<span style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10}}><Spin/>Generando propuesta...</span>:"Generar propuesta de respuesta"}
-          </BtnPri>
-
-          {/* RESPUESTA */}
-          {response&&(
-            <div ref={responseRef} style={{marginTop:24}}>
-              <div style={{background:C.surface,borderRadius:14,overflow:"hidden",boxShadow:"0 4px 20px rgba(13,43,94,0.12)",border:`1px solid ${C.border}`}}>
-                <div style={{background:`linear-gradient(135deg,${C.blue900},${C.blue800})`,padding:"16px 22px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-                  <div>
-                    <div style={{fontSize:11,color:C.blue200,letterSpacing:"1.2px",textTransform:"uppercase",fontWeight:600,marginBottom:3}}>Propuesta generada · {empleadoActual.nombre}</div>
-                    <div style={{fontSize:15,fontWeight:700,color:"#fff"}}>Revisa y edita antes de enviar</div>
-                  </div>
-                  <div style={{display:"flex",gap:8}}>
-                    <button onClick={copy} style={{cursor:"pointer",border:"1px solid rgba(255,255,255,.3)",background:"rgba(255,255,255,.12)",color:"#fff",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600}}>{copied?"✓ Copiado":"Copiar texto"}</button>
-                    <button onClick={reset} style={{cursor:"pointer",border:"1px solid rgba(255,255,255,.2)",background:"transparent",color:"rgba(255,255,255,.7)",borderRadius:8,padding:"7px 14px",fontSize:12}}>Nueva consulta</button>
-                  </div>
-                </div>
-                <div style={{background:C.blue50,borderBottom:`1px solid ${C.border}`,padding:"8px 20px",display:"flex",alignItems:"center",gap:10}}>
-                  <span style={{fontSize:10,fontWeight:700,letterSpacing:"1.5px",textTransform:"uppercase",color:C.gold,border:`1px solid ${C.gold}`,padding:"2px 8px",borderRadius:4}}>Borrador</span>
-                  <span style={{fontSize:11,color:C.textLight}}>Editable · verifica los datos antes de enviar</span>
-                </div>
-                <textarea value={response} onChange={e=>setResponse(e.target.value)}
-                  style={{...field,minHeight:300,padding:22,border:"none",background:C.surface,lineHeight:1.85,outline:"none",resize:"vertical"}}/>
-                <div style={{padding:"14px 20px",background:C.card,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-                  {savedOk?(
-                    <div style={{fontSize:12,color:C.okText,fontWeight:600}}>✓ Guardada en {topics.length>0?topics.map(id=>materias.find(m=>m.id===id)?.label).join(" y "):"Otros"} · el equipo la usará como referencia</div>
-                  ):(
-                    <div style={{fontSize:12,color:C.textMid}}>
-                      <strong style={{color:C.text}}>¿Esta respuesta es buena?</strong> Edítala si hace falta y guárdala.
-                      <div style={{fontSize:11,color:C.textLight,marginTop:2}}>Se guardará en: <strong>{topics.length>0?topics.map(id=>materias.find(m=>m.id===id)?.label).join(", "):"Otros"}</strong> · visible para todo el equipo</div>
-                    </div>
-                  )}
-                  {!savedOk&&<button onClick={guardarEjemplo} style={{cursor:"pointer",background:`linear-gradient(135deg,${C.blue500},${C.blue600})`,border:"none",borderRadius:8,padding:"9px 18px",color:"#fff",fontSize:12,fontWeight:700,boxShadow:"0 2px 6px rgba(30,91,175,0.3)",whiteSpace:"nowrap"}}>📚 Guardar como ejemplo</button>}
-                </div>
-              </div>
-              <div style={{marginTop:12,background:C.blue50,border:`1px solid ${C.blue200}`,borderRadius:8,padding:"10px 14px"}}>
-                <span style={{fontSize:12,color:C.blue600}}><strong>Siguiente paso:</strong> Copia el texto y pégalo en IONOS para enviarlo desde tu cuenta habitual.</span>
-              </div>
-              <div style={{display:"flex",gap:8,marginTop:12}}>
-                <BtnSec onClick={generate}>↺ Regenerar</BtnSec>
-                <BtnSec onClick={reset}>+ Nueva consulta</BtnSec>
-              </div>
-            </div>
-          )}
-        </>)}
-      </div>
-    </div>
-  );
-}const ejsRel=[];
+    let sys = "Eres el equipo de " + FIRM + ", asesoría especializada en fiscal, contable y laboral en España.";
+    sys += "\n- Responde SIEMPRE en español.";
+    sys += "\n- Tono profesional pero cercano, nunca frío.";
+    sys += "\n- NUNCA uses comillas para enfatizar palabras dentro del texto.";
+    if(esWA){
+      sys += "\n- FORMATO WHATSAPP: Respuesta muy corta y directa, máximo 4-5 líneas. Sin saludos largos. Ve al grano. Cierra con: El equipo de " + FIRM;
+    } else {
+      sys += "\n- FORMATO EMAIL: Respuesta completa y bien explicada. Saluda por nombre, desarrolla con detalle, indica siguiente paso y cierra con oferta de ayuda.";
+      sys += "\n- Firma: El equipo de " + FIRM + "\n" + FEMAIL;
+    }
+    sys += "\n- Si hay riesgo fiscal, legal o de plazo, menciónalo brevemente.";
+    sys += "\n- Si falta información para responder con precisión, indícalo.";
+    const ejsRel=[];
     topics.forEach(tid=>{(ejemplosPorMateria[tid]||[]).slice(-3).forEach(ej=>ejsRel.push({...ej,matLabel:materias.find(m=>m.id===tid)?.label}));});
     if(ejsRel.length>0){
-      sys+=`\n\nEJEMPLOS DE RESPUESTAS VALIDADAS POR EL EQUIPO — úsalos como referencia exacta de tono y estructura:\n`;
-      ejsRel.forEach((ej,i)=>{sys+=`\n--- Ejemplo ${i+1} · ${ej.matLabel} · ${ej.cliente}${ej.titulo?" · "+ej.titulo:""} ---\n${ej.texto}\n`;});
-      sys+=`\nAdapta tu respuesta al estilo de estos ejemplos.`;
+      sys+="\n\nEJEMPLOS DE RESPUESTAS VALIDADAS POR EL EQUIPO — úsalos como referencia exacta de tono y estructura:\n";
+      ejsRel.forEach((ej,i)=>{sys+="\n--- Ejemplo "+(i+1)+" · "+ej.matLabel+" · "+ej.cliente+(ej.titulo?" · "+ej.titulo:"")+" ---\n"+ej.texto+"\n";});
+      sys+="\nAdapta tu respuesta al estilo de estos ejemplos.";
     }
     return sys;
   };
@@ -958,7 +611,7 @@ ${esWA
     if(!emailText.trim()){setError("Añade el texto del email.");return;}
     setError("");setLoading(true);setResponse("");setSavedOk(false);
     try{
-      const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-5-20251001",max_tokens:1000,system:buildSystem(canal),messages:[{role:"user",content:buildPrompt()}]})});
+      const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-5-20250929",max_tokens:1000,system:buildSystem(canal),messages:[{role:"user",content:buildPrompt()}]})});
       const data=await res.json();
       if(data.content?.[0]?.text){
         setResponse(data.content[0].text);
@@ -1034,7 +687,21 @@ ${esWA
   };
 
   const copy=()=>{navigator.clipboard.writeText(response).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2200);});};
-  const reset=()=>{setSelClient("");setShowNew(false);setNewName("");setNewType(null);setExtraCtx("");setTopics([]);clearContent();setResponse("");setError("");setCopied(false);setSavedOk(false);setCanal("email");};
+
+  const ajustar=async()=>{
+    if(!ajuste.trim()||!response.trim())return;
+    setAjustando(true);
+    try{
+      const sys=buildSystem(canal);
+      const prompt=`Tienes este borrador de respuesta que ya fue generado para un email de cliente:\n\n---BORRADOR ACTUAL---\n${response}\n---FIN BORRADOR---\n\nEl asesor pide el siguiente ajuste: "${ajuste}"\n\nReescribe la respuesta aplicando exactamente ese ajuste. Mantén el mismo destinatario y contexto. Devuelve solo el texto de la respuesta, listo para enviar.`;
+      const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-5-20250929",max_tokens:1000,system:sys,messages:[{role:"user",content:prompt}]})});
+      const data=await res.json();
+      if(data.content?.[0]?.text){setResponse(data.content[0].text);setAjuste("");setSavedOk(false);}
+      else setError("Error al ajustar: "+(data.error?.message||""));
+    }catch(e){setError("Error de red: "+e.message);}
+    finally{setAjustando(false);}
+  };
+  const reset=()=>{setSelClient("");setShowNew(false);setNewName("");setNewType(null);setExtraCtx("");setTopics([]);clearContent();setResponse("");setError("");setCopied(false);setSavedOk(false);setCanal("email");setAjuste("");};
 
   // ── Pantalla empleado ──
   if(!empleadoActual)return(<><style>{`@keyframes spin{to{transform:rotate(360deg)}}*{box-sizing:border-box;}`}</style><PantallaEmpleado empleados={empleados} onSelect={selectEmpleado} onAdd={addEmpleado}/></>);
@@ -1271,6 +938,31 @@ ${esWA
                 </div>
                 <textarea value={response} onChange={e=>setResponse(e.target.value)}
                   style={{...field,minHeight:300,padding:22,border:"none",background:C.surface,lineHeight:1.85,outline:"none",resize:"vertical"}}/>
+                {/* Panel de ajuste */}
+                <div style={{padding:"12px 20px",borderTop:`1px solid ${C.border}`,background:C.blue50}}>
+                  <div style={{fontSize:11,color:C.textLight,marginBottom:6}}>
+                    💬 <strong style={{color:C.textMid}}>Pide un ajuste a la IA</strong> sin salir de la app
+                  </div>
+                  <div style={{display:"flex",gap:8}}>
+                    <input
+                      value={ajuste}
+                      onChange={e=>setAjuste(e.target.value)}
+                      onKeyDown={e=>e.key==="Enter"&&ajustar()}
+                      placeholder='Ej: "acórtala", "añade más detalle", "tono más formal", "¿suena bien?"'
+                      style={{...field,fontSize:12,padding:"8px 12px",flex:1}}
+                    />
+                    <button onClick={ajustar} disabled={ajustando||!ajuste.trim()} style={{
+                      cursor:ajustando||!ajuste.trim()?"not-allowed":"pointer",
+                      background:ajustando||!ajuste.trim()?C.border2:`linear-gradient(135deg,${C.blue500},${C.blue800})`,
+                      color:ajustando||!ajuste.trim()?C.textLight:"#fff",
+                      border:"none",borderRadius:8,padding:"8px 16px",
+                      fontSize:12,fontWeight:700,whiteSpace:"nowrap",
+                      boxShadow:ajustando?"none":"0 2px 6px rgba(30,91,175,0.25)",
+                    }}>
+                      {ajustando?"Ajustando...":"Ajustar →"}
+                    </button>
+                  </div>
+                </div>
                 <div style={{padding:"14px 20px",background:C.card,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
                   {savedOk?(
                     <div style={{fontSize:12,color:C.okText,fontWeight:600}}>✓ Guardada en {topics.length>0?topics.map(id=>materias.find(m=>m.id===id)?.label).join(" y "):"Otros"} · el equipo la usará como referencia</div>
